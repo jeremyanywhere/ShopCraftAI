@@ -1,0 +1,39 @@
+{
+  "destination":"dest",
+  "source":"src",
+  "components":[
+      {
+        "type": "persistence",
+        "name": "MongoDBComponent",
+        "workdir":"persistence",
+        "createPrompt":" Please create python code that uses PyMongo to create MongoDB Collections with a sample Documents for each, for a basic commerce website, considering customers, products, orders and any other collections you think are important ",
+        "setup":"setup.py",
+        "dependencyPrompt": "please take into account attached setup.py file showing creation of MongoDB collections and sample documents",
+        "buildscript":"build.sh",
+        "dependencies": [],
+        "conversation": [
+          "please generate Mongo Collections and sample MongoDB documents with values appropriate for a customer on a commerce site",
+          "ok, here is a sample MongoDB.. {blah: customer, blah} etc.",
+          "please generate a collection for a shopping cart",
+          "ok, etc"
+        ],
+        "alternativeConversation": "/usr/local/ShopCraftAI/persistence.build"
+      },
+      {
+        "type": "frontEnd",
+        "name": "vueFrontEnd",
+        "workdir":"www",
+        "setup":"setup.py",
+        "buildscript":"build.sh",
+        "dependencies": []
+      },
+      {
+        "type": "serviceLayer",
+        "name": "fastAPIServiceLayer",
+        "workdir":"fastAPIServiceLayer",
+        "setup":"setup.py",
+        "buildscript":"build.sh",
+        "dependencies": ["MongoDBComponent"]
+      }
+    ]
+  }
