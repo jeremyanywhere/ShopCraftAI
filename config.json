@@ -6,6 +6,7 @@
         "type": "persistence",
         "name": "MongoDBComponent",
         "workdir":"persistence",
+        "instructions":"You are a MongoDB generating Tool, you will create sample collections to answer questions.",
         "createPrompt":" Please create python code that uses PyMongo to create MongoDB Collections with a sample Documents for each, for a basic commerce website, considering customers, products, orders and any other collections you think are important ",
         "setup":"setup.py",
         "dependencyPrompt": "please take into account attached setup.py file showing creation of MongoDB collections and sample documents",
@@ -22,6 +23,7 @@
       {
         "type": "frontEnd",
         "name": "vueFrontEnd",
+        "instructions":"You are a front end code generating tool and will generate HTML and Javascript when requested for a Vue application",
         "workdir":"www",
         "setup":"setup.py",
         "buildscript":"build.sh",
@@ -30,7 +32,8 @@
       {
         "type": "serviceLayer",
         "name": "fastAPIServiceLayer",
-        "workdir":"fastAPIServiceLayer",
+        "instructions":"You are a code generating tool and and will generate Python code for FastAPI webservice framework when requested",
+       "workdir":"fastAPIServiceLayer",
         "setup":"setup.py",
         "buildscript":"build.sh",
         "dependencies": ["MongoDBComponent"]

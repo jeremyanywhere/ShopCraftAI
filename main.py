@@ -1,10 +1,11 @@
 import json
 import os
 import sys
-from chatgptAPIUtils import createAssistants
+import chatgptAPIUtils
 
 config = {}
 availableComponents = {}
+assistants = {}
 currentComponent = {}
 rootDirectory = {}
 promptMode = False
@@ -42,9 +43,11 @@ def clean(param=None):
         print("usage: clean <component> | all")
         
 def create(param=None):
-        # Ensure the base directory exists
+    global assistants
+    # Ensure the base directory exists
     if not os.path.exists(config['source']):
         os.makedirs(config['source'])
+    assistants = chatgptAPIUtils.createAssistants(availableComponents)
     # Iterate through each component in the config
     for component in config.get('components', []):
         subdir_name = component.get('workdir')
@@ -61,7 +64,7 @@ def create(param=None):
         else:
             print("No 'workdir' key found for a component.")
 
-        print("Created src structure and run startup prompts ")
+    print("src structure created. Startup scripts run (if new)")
 
 def select(param=None):
     global currentComponent

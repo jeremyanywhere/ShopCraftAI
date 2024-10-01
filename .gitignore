@@ -2,3 +2,5 @@ key.txt
 CommerceComponents.md
 AI-CommmerceWizardArchitecture.md
 dest/.DS_Store
+.DS_Store
+__pycache__/chatgptAPIUtils.cpython-312.pyc
