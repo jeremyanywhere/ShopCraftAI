@@ -6,9 +6,8 @@ import chatgptAPIUtils
 config = {}
 availableComponents = {}
 assistants = {}
-currentComponent = {}
 rootDirectory = {}
-promptMode = False
+promptMode = False #deprecated
 
 def read_config_file(file_path):
     with open(file_path, 'r') as file:
@@ -24,17 +23,56 @@ def verify(msg: str) -> bool:
     
     # Return True only if the user types 'yes'
     return user_input == "yes"
-
+def get_component_directory(component):
+    workdir = component.get("workdir")
+    source_dir = config.get("source")
+    
+    if workdir and source_dir:
+        # Combine source_dir and workdir to form the full path
+        full_path = os.path.join(source_dir, workdir)
+        
+        if os.path.exists(full_path) and os.path.isdir(full_path):
+            return full_path
+        else:
+            print(f"Error: The directory '{full_path}' does not exist or is not accessible.")
+    else:
+        print(f"Error: Could not find 'workdir' or 'source' in the configuration.")
+    return None
 # Define the available commands as functions
 def list(param=None):
-    if param == None or param =='commands':
-        for command in available_commands.keys():
-            print(f"- {command}")
-    elif param=='components':
-        for component in availableComponents:
-            print (f"Component: {availableComponents[component]['name']} - (type: {availableComponents[component]['type']} )")
+    global promptMode  # Access the global variable promptMode
+    global currentComponent  # Access the global variable currentComponent
+    global config  # Access the global config dict
+    
+    # Check if promptMode is True
+    if promptMode:
+        workdir = currentComponent.get("workdir")
+        source_dir = config.get("source")
+        
+        if workdir and source_dir:
+            # Combine source_dir and workdir to form the full path
+            full_path = os.path.join(source_dir, workdir)
+            
+            if os.path.exists(full_path) and os.path.isdir(full_path):
+                # List files in the full directory path
+                print(f"Listing files in {full_path}:")
+                for file_name in os.listdir(full_path):
+                    print(file_name)
+            else:
+                print(f"The directory '{full_path}' does not exist or is not accessible.")
+        else:
+            print(f"Error: Could not find 'workdir' or 'source' in the configuration.")
+    
     else:
-        print(f"Param <{param}> for command 'list'  not known.") 
+        # Original behavior if promptMode is False
+        if param == None or param == 'commands':
+            for command in available_commands.keys():
+                print(f"- {command}")
+        elif param == 'components':
+            for component in availableComponents:
+                print(f"Component: {availableComponents[component]['name']} - (type: {availableComponents[component]['type']} )")
+        else:
+            print(f"Param <{param}> for command 'list' not known.")
 
 def clean(param=None):
     if param == "all":
@@ -42,43 +80,102 @@ def clean(param=None):
     else:
         print("usage: clean <component> | all")
         
-def create(param=None):
+def set_up(param=None):
     global assistants
+    global config
+    
+    # If param is None, return the usage string
+    if param is None:
+        return "usage: setup <name | all>"
+    
     # Ensure the base directory exists
     if not os.path.exists(config['source']):
         os.makedirs(config['source'])
-    assistants = chatgptAPIUtils.createAssistants(availableComponents)
-    # Iterate through each component in the config
-    for component in config.get('components', []):
-        subdir_name = component.get('workdir')
-        if subdir_name:
-            subdir_path = os.path.join(config['source'], subdir_name)
-            
-            # Check if the subdirectory already exists
-            if os.path.exists(subdir_path):
-                print(f"Directory '{subdir_name}' already exists.")
+    
+    # If param is 'all', loop through all components
+    if param == "all":
+        for component in config.get('components', []):
+            subdir_name = component.get('workdir')
+            if subdir_name:
+                subdir_path = os.path.join(config['source'], subdir_name)
+                
+                if os.path.exists(subdir_path):
+                    print(f"Directory '{subdir_name}' already exists.")
+                else:
+                    os.makedirs(subdir_path)
+                    print(f"Created directory '{subdir_name}'.")
+                
+                # Pass the current component to chatgptAPIUtils.run_set_up
+                chatgptAPIUtils.run_set_up(component, config)
             else:
-                # Create the subdirectory
-                os.makedirs(subdir_path)
-                print(f"Created directory '{subdir_name}'.")
+                print("No 'workdir' key found for a component.")
+                return
+    else:
+        # If param is a string representing a component name
+        component = next((comp for comp in config.get('components', []) if comp.get('name') == param), None)
+        
+        if component:
+            # Pass the found component to chatgptAPIUtils.run_set_up
+            subdir_name = component.get('workdir')
+            if subdir_name:
+                subdir_path = os.path.join(config['source'], subdir_name)
+                
+                if os.path.exists(subdir_path):
+                    print(f"Directory '{subdir_name}' already exists.")
+                else:
+                    os.makedirs(subdir_path)
+                    print(f"Created directory '{subdir_name}'.")
+                
+                # Call the setup function for this component
+                chatgptAPIUtils.run_set_up(component, config)
         else:
-            print("No 'workdir' key found for a component.")
+            print(f"Component with name '{param}' not found.")
 
-    print("src structure created. Startup scripts run (if new)")
-
-def select(param=None):
-    global currentComponent
+def edit(param=None):
+    global config
+    component = {}
     if param:
-        value = availableComponents.get(param, '')
-        if value:
-            currentComponent = value
-            promptMode == True
-            print("Entering Prompt Mode:")
-            print(f"Component set to '{currentComponent['name']}")
+        component = availableComponents.get(param, '')
+        if component:
+            print(f"Entering Edit Mode for '{component.get('name')}'")
+        else:
+            print(f"Component '{param}' not found.")
+            return
+    else:
+        print("usage: edit <name>")
+        return
+    while True:
+        print ("Type your prompt, or 'view', or 'exit'")
+        component_path = get_component_directory(component)
+        user_input = input(f"{component.get('name')} > ")
+        if not user_input:
+            continue
+        if user_input.startswith("exit"):
+            print(f"Exiting Edit Mode.'")
+            return
+        if user_input.startswith("view"):
+            print(f"Listing files in component directory {component_path}:")
+            for file_name in os.listdir(component_path):
+                 print(f"    {file_name}")
+            print("\n") 
+            continue   
+        print(f"..working")
+        chatgptAPIUtils.execute_prompt(get_component_directory(component), component, user_input)
+
+def init(param=None):
+    global currentComponent
+    global promptMode
+    global config
+
+    if param:
+        comp = availableComponents.get(param, '')
+        if comp:
+            print(f"Starting Component '{comp.get('name')}'")
+            chatgptAPIUtils.run_set_up(comp, config)
         else:
             print(f"Component '{param}' not found.")
     else:
-        print("usage: greet <name>")
+        print("usage: init <name>")
 
 def exit_program(param=None):
     global currentComponent
@@ -93,24 +190,23 @@ def exit_program(param=None):
 
 # Create a dictionary to map command names to functions and whether they accept parameters
 available_commands = {
-    '.create': create,
-    '.help': list,
-    '.list': list,
-    '.clean': clean,
-    '.select': select,
-    '.exit': exit_program
+    'setup': set_up,
+    'help': list,
+    'list': list,
+    'clean': clean,
+    'edit': edit,
+    'init': init,
+    'exit': exit_program
 }
+def prompt(component):
+    return
 
 def go():
     list()
     print ("ShopCraftAI CLI.")
     while True:
         # Accept user input and split it into command and parameter (if provided)
-        compName = ""
-        if len(currentComponent)>0:
-            compName = currentComponent["name"] 
-            
-        user_input = input(f"{compName} >: ").strip().split()
+        user_input = input("% ").strip().split()
         
         if not user_input:
             print("No command entered. Try again.")

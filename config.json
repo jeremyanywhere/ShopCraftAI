@@ -8,7 +8,7 @@
         "workdir":"persistence",
         "instructions":"You are a MongoDB generating Tool, you will create sample collections to answer questions.",
         "createPrompt":" Please create python code that uses PyMongo to create MongoDB Collections with a sample Documents for each, for a basic commerce website, considering customers, products, orders and any other collections you think are important ",
-        "setup":"setup.py",
+        "filename":"setup.py",
         "dependencyPrompt": "please take into account attached setup.py file showing creation of MongoDB collections and sample documents",
         "buildscript":"build.sh",
         "dependencies": [],

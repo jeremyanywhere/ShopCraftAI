@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Greeting</title>
+  <style>
+    body {
+      background-color: teal; /* Set background color to teal */
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    button {
+      background-color: orange; /* Set button color to orange */
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      opacity: 0.8; /* Add a hover effect to the button */
+    }
+  </style>
+</head>
+<body>
+  <h1 id="greeting">Click the button to see a random greeting!</h1>
+  <button onclick="generateGreeting()">Generate Greeting</button>
+
+  <!-- Link to the JavaScript file -->
+  <script src="script.js"></script>
+</body>
+</html>
