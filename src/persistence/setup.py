@@ -17,7 +17,8 @@ customers.insert_many([
         "email": "johndoe@example.com",
         "address": "123 Elm Street",
         "phone": "123-456-7890",
-        "join_date": "2022-01-15"
+        "join_date": "2022-01-15",
+        "favorite_game": "Chess"
     },
     {
         "customer_id": "C002",
@@ -25,7 +26,8 @@ customers.insert_many([
         "email": "janesmith@example.com",
         "address": "456 Oak Avenue",
         "phone": "098-765-4321",
-        "join_date": "2022-02-20"
+        "join_date": "2022-02-20",
+        "favorite_game": "Sudoku"
     }
 ])
 

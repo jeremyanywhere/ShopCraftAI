@@ -23,6 +23,9 @@ def verify(msg: str) -> bool:
     
     # Return True only if the user types 'yes'
     return user_input == "yes"
+
+
+
 def get_component_directory(component):
     workdir = component.get("workdir")
     source_dir = config.get("source")
@@ -160,7 +163,7 @@ def edit(param=None):
             print("\n") 
             continue   
         print(f"..working")
-        chatgptAPIUtils.execute_prompt(get_component_directory(component), component, user_input)
+        chatgptAPIUtils.execute_prompt(component, config, user_input)
 
 def init(param=None):
     global currentComponent
@@ -229,7 +232,7 @@ def main():
     global config 
     config = read_config_file("config.json")
     print(f"Config is {config}")
-    print(availableComponents)
+    # print(availableComponents)
     go()
 
 main()

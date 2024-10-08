@@ -1,0 +1,49 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Greeting</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: teal;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    button {
+      background-color: purple;
+      color: white;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.8;
+    }
+    
+    .text-center {
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="d-flex justify-content-center align-items-center" style="height: 100vh; display: flex; justify-content: center; align-items: center;">
+  <div class="container text-center">
+    <h1 id="greeting" class="mb-4">Click the button to see a random greeting!</h1>
+    <button onclick="generateGreeting()">Generate Greeting</button>
+  </div>
+
+  <!-- Link to the JavaScript file -->
+  <script src="script.js"></script>
+  <!-- Bootstrap JS and dependencies -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
