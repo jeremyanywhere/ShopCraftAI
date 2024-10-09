@@ -7,33 +7,29 @@
         "name": "MongoDBComponent",
         "workdir":"persistence",
         "instructions":"You are a MongoDB generating Tool, you will create sample collections to answer questions.",
-        "createPrompt":" Please create python code that uses PyMongo to create MongoDB Collections with a sample Documents for each, for a basic commerce website, considering customers, products, orders and any other collections you think are important ",
+        "create_prompt":" Please create python code that uses PyMongo to create MongoDB Collections with a sample Document for each, for a basic commerce website, considering customers, products, orders and any other collections you think are important ",
         "filename":"setup.py",
+        "do_not_upload": [".png"],
         "dependencyPrompt": "please take into account attached setup.py file showing creation of MongoDB collections and sample documents",
         "buildscript":"build.sh",
-        "dependencies": [],
-        "conversation": [
-          "please generate Mongo Collections and sample MongoDB documents with values appropriate for a customer on a commerce site",
-          "ok, here is a sample MongoDB.. {blah: customer, blah} etc.",
-          "please generate a collection for a shopping cart",
-          "ok, etc"
-        ],
-        "alternativeConversation": "/usr/local/ShopCraftAI/persistence.build"
+        "dependencies": []
       },
       {
         "type": "frontEnd",
         "name": "vueFrontEnd",
-        "instructions":"You are a front end code generating tool and will generate HTML and Javascript when requested for a Vue application",
+        "instructions":"You are a front end code generating tool and will generate HTML and Javascript or other necessary code when requested, for a Vue application",
         "workdir":"www",
+        "do_not_upload": [".png"],
         "setup":"setup.py",
         "buildscript":"build.sh",
-        "dependencies": []
+        "dependencies": ["MongoDBComponent"]
       },
       {
         "type": "serviceLayer",
         "name": "fastAPIServiceLayer",
         "instructions":"You are a code generating tool and and will generate Python code for FastAPI webservice framework when requested",
-       "workdir":"fastAPIServiceLayer",
+        "workdir":"fastAPIServiceLayer",
+        "do_not_upload": [".png"],
         "setup":"setup.py",
         "buildscript":"build.sh",
         "dependencies": ["MongoDBComponent"]

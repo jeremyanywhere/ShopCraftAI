@@ -2,20 +2,14 @@ import json
 import os
 import sys
 import chatgptAPIUtils
+import configurations
 
 config = {}
-availableComponents = {}
 assistants = {}
 rootDirectory = {}
 promptMode = False #deprecated
 
-def read_config_file(file_path):
-    with open(file_path, 'r') as file:
-        data = json.load(file)  # Load the JSON content into a Python dictionary
-    #put components into a dict. 
-    for comp in data['components']:
-        availableComponents[comp["name"]] = comp
-    return data
+
 
 def verify(msg: str) -> bool:
     # Print the message followed by "(yes/no)"
@@ -72,8 +66,8 @@ def list(param=None):
             for command in available_commands.keys():
                 print(f"- {command}")
         elif param == 'components':
-            for component in availableComponents:
-                print(f"Component: {availableComponents[component]['name']} - (type: {availableComponents[component]['type']} )")
+            for component in configurations.get_components():
+                print(f"Component: {configurations.get_components()[component]['name']} - (type: {configurations.get_components()[component]['type']} )")
         else:
             print(f"Param <{param}> for command 'list' not known.")
 
@@ -109,7 +103,7 @@ def set_up(param=None):
                     print(f"Created directory '{subdir_name}'.")
                 
                 # Pass the current component to chatgptAPIUtils.run_set_up
-                chatgptAPIUtils.run_set_up(component, config)
+                chatgptAPIUtils.set_up_run(component, config)
             else:
                 print("No 'workdir' key found for a component.")
                 return
@@ -130,7 +124,7 @@ def set_up(param=None):
                     print(f"Created directory '{subdir_name}'.")
                 
                 # Call the setup function for this component
-                chatgptAPIUtils.run_set_up(component, config)
+                chatgptAPIUtils.set_up_run(component, config)
         else:
             print(f"Component with name '{param}' not found.")
 
@@ -138,7 +132,7 @@ def edit(param=None):
     global config
     component = {}
     if param:
-        component = availableComponents.get(param, '')
+        component = configurations.get_components().get(param, '')
         if component:
             print(f"Entering Edit Mode for '{component.get('name')}'")
         else:
@@ -148,21 +142,30 @@ def edit(param=None):
         print("usage: edit <name>")
         return
     while True:
-        print ("Type your prompt, or 'view', or 'exit'")
+        print ("Type your prompt, use '/' to preceed commands '/view', or '/exit' or '/with <filename>' to only attach a specific file")
         component_path = get_component_directory(component)
         user_input = input(f"{component.get('name')} > ")
         if not user_input:
             continue
-        if user_input.startswith("exit"):
+        if not user_input.startswith("/") and not len(user_input) > 7:
+            print(f"Prompt too short! Did you mean to type a command? Preceed with / '")
+            continue
+        if user_input.startswith("/exit"):
             print(f"Exiting Edit Mode.'")
             return
-        if user_input.startswith("view"):
+        if user_input.startswith("/view"):
             print(f"Listing files in component directory {component_path}:")
             for file_name in os.listdir(component_path):
                  print(f"    {file_name}")
             print("\n") 
             continue   
-        print(f"..working")
+        if user_input.startswith("/with"):
+            # check file exists, then upload that file only before executing prompt
+            without_with = user_input.split("/with ", 1)[1]
+            with_file = without_with.split()[0]
+            prompt = without_with[len(with_file):].strip()
+            chatgptAPIUtils.execute_prompt(component, config, prompt, with_file)
+            continue
         chatgptAPIUtils.execute_prompt(component, config, user_input)
 
 def init(param=None):
@@ -171,7 +174,7 @@ def init(param=None):
     global config
 
     if param:
-        comp = availableComponents.get(param, '')
+        comp = configurations.get_components().get(param, '')
         if comp:
             print(f"Starting Component '{comp.get('name')}'")
             chatgptAPIUtils.run_set_up(comp, config)
@@ -230,7 +233,7 @@ def go():
 # Run the command loop
 def main():
     global config 
-    config = read_config_file("config.json")
+    config = configurations.get_config()
     print(f"Config is {config}")
     # print(availableComponents)
     go()

@@ -1,4 +1,5 @@
-key.txt
+.key
+.sessions.json
 CommerceComponents.md
 AI-CommmerceWizardArchitecture.md
 dest/.DS_Store

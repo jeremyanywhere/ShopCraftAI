@@ -2,45 +2,22 @@ import os
 from typing import List
 from openai import OpenAI
 import re
-
-from pydantic import BaseModel
-
-class SourceCodeFile(BaseModel):
-    filename: str
-    original_file_id: str
-    new: bool
-    content: str
-
-class CodeUpdateResponse(BaseModel):
-    message_id: str
-    message_text: str
-    updated_files: List[SourceCodeFile]
+import mimetypes
+import configurations 
 
 
 assistants = {}
 client = None
 
 
-def getKey():
-    try:
-        with open("key.txt", 'r') as file:
-            api_key = file.readline().strip()  # Read the first line and strip any extra whitespace/newline
-            return api_key
-    except FileNotFoundError:
-        print(f"Error: Missing key.txt file. Please create a key.txt file with your ChatGPT key in it")
-        return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-    
 def getClient():
     global client
     if client == None:
-        client = OpenAI(api_key=getKey())
+        client = OpenAI(api_key=configurations.getKey())
         print("..getting OpenAI Client..")
     return client
 
-def get_assistant(component):
+def create_assistant(component):
     global assistants
     if component["name"] in assistants:
         return assistants.get(component["name"])
@@ -53,6 +30,22 @@ def get_assistant(component):
     print(f"\nCreating assistant for {component['name']} - {assistant}")
     assistants[component["name"]] = assistant
     return assistant
+
+
+def delete_all_files():
+    # list all files
+    #cycle through that
+    # delete each one. 
+    files = getClient().files
+    for file in files.list():
+        files.delete(file.id)
+        print(f"Deleted file: {file.id} - {file.filename}")
+
+
+def TEST_files():    
+    files = getClient().files
+    file = files.create(file=open("config.json", "rb"),extra_headers={"ppath":"peepee"})
+
 
 
 
@@ -80,7 +73,7 @@ def extract_python_code(messages):
     # Join all code blocks and return
     return "\n\n".join(code_blocks) if code_blocks else ""
 
-def get_component_file_paths(data, component_name, visited=None):
+def get_component_file_paths(data, component_name, visited=None, ignore = []):
     # Initialize visited set to avoid circular dependencies
     if visited is None:
         visited = set()
@@ -92,7 +85,7 @@ def get_component_file_paths(data, component_name, visited=None):
     component_dict = {comp["name"]: comp for comp in data["components"]}
     
     # Recursive helper function to collect file paths
-    def collect_file_paths(comp_name):
+    def collect_file_paths(comp_name, ignore):
         if comp_name in visited:
             return []  # Avoid revisiting components
 
@@ -110,18 +103,23 @@ def get_component_file_paths(data, component_name, visited=None):
         full_workdir_path = os.path.join(base_dir, workdir)
         if os.path.exists(full_workdir_path) and os.path.isdir(full_workdir_path):
             for filename in os.listdir(full_workdir_path):
-                file_path = os.path.join(full_workdir_path, filename)
-                if os.path.isfile(file_path):
-                    file_paths.append(file_path)
+                ignore_files = False
+                for suffix in ignore:
+                    if filename.endswith(suffix):
+                        ignore_files = True
+                if not ignore_files:
+                    file_path = os.path.join(full_workdir_path, filename)
+                    if os.path.isfile(file_path):
+                        file_paths.append(file_path)
 
         # Recursively collect file paths from dependencies
         for dependency in component.get("dependencies", []):
-            file_paths.extend(collect_file_paths(dependency))
+            file_paths.extend(collect_file_paths(dependency, ignore))
 
         return file_paths
 
     # Start collecting file paths from the given component
-    return collect_file_paths(component_name)
+    return collect_file_paths(component_name, ignore)
 
 def write_file(content, component, config):
     # Initialize 'directory' from 'component' and 'src' from 'config'
@@ -148,8 +146,12 @@ def write_file(content, component, config):
     except Exception as e:
         return f"An error occurred: {e}"
 
-def run_set_up(component, config):
-    assistant = get_assistant(component)
+def set_up_run(component, config):
+    asst_id = configurations.get_assistant(component["name"])
+    if not asst_id:
+        assistant = create_assistant(component)
+        asst_id = assistant.id
+        configurations.set_assistant(assistant)
     print(f"startup with assistant {assistant.id}")
     client = getClient()
     # get instructions and create prompt from the model.
@@ -165,7 +167,7 @@ def run_set_up(component, config):
    
     run = client.beta.threads.runs.create_and_poll(
         thread_id=thread.id,
-        assistant_id=assistant.id,
+        assistant_id=asst_id,
         instructions=component["instructions"]
     )
     if run.status == 'completed': 
@@ -179,57 +181,91 @@ def run_set_up(component, config):
     else:
         print(run.status)
 
-def create_message_file_attachments(component, config):
+def create_message_file_attachments(component, config, with_file = None):
     # Array to hold all file attachments (as dicts)
     #TODO.. this needs to honor the dependency list in the config, and build a dict mapping the files to their ids. 
-    all_files_and_dependencies = get_component_file_paths(config, component['name'])
+    if with_file == None:
+        all_files_and_dependencies = get_component_file_paths(config, component['name'],with_file, component['do_not_upload'])
+    else:
+        base_dir = config.get("source", "")
+        work_dir = component.get("workdir")
+        full_workdir_path = os.path.join(base_dir, work_dir,with_file)
+        if os.path.isfile(full_workdir_path):
+            all_files_and_dependencies = [full_workdir_path]
+        else:
+            print(f"File: {with_file} not found.")
+            all_files_and_dependencies = [] 
+
     attachments = []
     filename_id_map = {}
-    directory = f"{component.get('workdir')}/{component.get('filename')}"
     
     # Constant value for tools
-    #tools_value = [{"type": "function"}]
-    tools_value = [
-    {
-      "type": "function",
-      "function": {
-        "name": "get_current_temperature",
-        "description": "Get the current temperature for a specific location",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "location": {
-              "type": "string",
-              "description": "The city and state, e.g., San Francisco, CA"
-            },
-            "unit": {
-              "type": "string",
-              "enum": ["Celsius", "Fahrenheit"],
-              "description": "The temperature unit to use. Infer this from the user's location."
-            }
-          },
-          "required": ["location", "unit"]
-        }
-      }
-    }]
     
     # Iterate over all files in the given directory
     for file_path in all_files_and_dependencies:
         if os.path.isfile(file_path):
+            # check that the file doesn't exist before adding. 
             # Upload each file and create a dictionary with file_id and tools
-            file = getClient().files.create(
-                file=open(file_path, "rb"),
-                purpose='assistants',
-            )
+            existing_uploaded_file = configurations.get_uploaded_file(file_path)
+            if (existing_uploaded_file):
+                file_id_to_attach = existing_uploaded_file
+                print(f"File not uploaded, already up there - {file_path} ")
+            else:    
+                file = getClient().files.create(
+                    file=open(file_path, "rb"),
+                    purpose='assistants',
+                )
+                file_id_to_attach = file.id
+                configurations.set_uploaded_file(file_path, file.id)
+
             # Append the dictionary to the attachments list
             attachments.append({
-                "file_id": file.id,
+                "file_id": file_id_to_attach,
                 "tools": [{"type": "code_interpreter"}]
             })
             # add it to the map so we can find it when it has been modified
             filename_id_map[file.id] = file_path
+            
     
     return attachments, filename_id_map
+
+
+
+def write_new_file(file_id, path):
+    client = getClient()
+    print("Creating a new file...")
+
+    # Fetch the file content from the client
+    file = client.files.content(file_id)
+
+    try:
+        # Use mimetypes to guess whether the file is text or binary
+        mime_type, encoding = mimetypes.guess_type(path)
+        
+        # Check if the content is binary (if the mime type is None or it starts with 'text')
+        is_text = mime_type and mime_type.startswith('text')
+
+        # If it's text, decode if necessary, otherwise leave as binary
+        if isinstance(file.content, bytes):
+            if is_text:
+                content = file.content.decode('utf-8')  # Decode text files
+            else:
+                content = file.content  # Keep binary content as is
+        else:
+            content = file.content  # Already decoded text
+
+        # Open the file in 'x' mode for text or 'xb' mode for binary
+        mode = 'x' if is_text else 'xb'
+        with open(path, mode) as new_file:
+            new_file.write(content)
+
+        print(f"File successfully created at {path}")
+    except FileExistsError:
+        print(f"Error: File '{path}' already exists.")
+    except Exception as e:
+        print(f"An error occurred while writing to the file: {e}")
+
+    return None
 
 def rewrite_updated_file(file_id, path):
     client = getClient()
@@ -255,11 +291,15 @@ def rewrite_updated_file(file_id, path):
 
 
 
-def execute_prompt(component, config, user_prompt):
+def execute_prompt(component, config, user_prompt, with_file=None):
     #TODO : security / sanity check on the prompt.
-    assistant = get_assistant(component)
+    asst_id = configurations.get_assistant(component["name"])
+    if not asst_id:
+        assistant = create_assistant(component)
+        asst_id = assistant.id
+        configurations.set_assistant(assistant)
     client = getClient()
-    file_attachments,filename_id_map  = create_message_file_attachments(component, config)
+    file_attachments,filename_id_map  = create_message_file_attachments(component, config, with_file)
     print(f"ID to filename map.. {filename_id_map}")
     
     #ChatGPT Assistant stuff. Create Thread.
@@ -273,13 +313,14 @@ def execute_prompt(component, config, user_prompt):
     
     run = client.beta.threads.runs.create_and_poll(
         thread_id=thread.id,
-        assistant_id=assistant.id,
+        assistant_id=asst_id,
         instructions=
         """
             You are a code generation and editing tool, you will make changes to any attached 
             files needed, as requested. You will update each necessary file to create a new file.
-            You must attach all new, updated files as file attachments to the message response. 
+            You must attach all updated files as file attachments to the message response. 
             Each updated file must be given a name which includes the id of the original file that was modified. 
+            If you are asked to create an image file you don't need to use the attached files as reference.
          """
         #NB this prompt needs to mention that the result must be "attached to the message", otherwise it seems not to do that.    
             
@@ -297,17 +338,24 @@ def execute_prompt(component, config, user_prompt):
     if messages.data is not None and len(messages.data) > 0:
         attachments = messages.data[0].attachments
     # Check if attachments is not None before trying to loop
+        #TODO also check that attachments are actually file attachments. 
         if attachments is not None and len(attachments) > 0:
             for attachment in attachments:
                 # Retrieve the file using the file_id from the attachment
                 file = getClient().files.retrieve(attachment.file_id)
                 print(f"Lo. We have a file {file}, what's in the map? {filename_id_map}")
                 # Iterate over the file IDs in filename_id_map and check for matches
+                file_found = False
                 for file_id in filename_id_map:
                     print(f"Looking through the map :-{file_id}, {filename_id_map[file_id]}, file.id is {file.id} filename is {file.filename}")
                     if file_id in file.filename:
                         print(f"Updating file.. {filename_id_map[file_id]} was updated.")
+                        file_found = True
                         rewrite_updated_file(file.id, filename_id_map[file_id])
+                if not file_found:
+                    print(f"Downloading new file.. {file.filename}")
+                    new_path = os.path.join(config['source'], component['workdir'], os.path.basename(file.filename))
+                    write_new_file(file.id, new_path)        
 
         else:
             print(f"Warning: No Files Updated. Try a different prompt?")
@@ -336,4 +384,5 @@ def execute_prompt(component, config, user_prompt):
     # )
     
     # return assistant
+# TEST_files()
     
