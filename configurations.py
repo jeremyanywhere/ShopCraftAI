@@ -1,5 +1,6 @@
 #manages sessions and configurations.
 import json
+import logger
 
 SESSION_FILE = ".sessions.json"
 KEY_FILE = ".key" 
@@ -8,7 +9,8 @@ CONFIG_FILE = "config.json"
 config = {}
 sessions = {}
 availableComponents = {}
-files = {}
+logging = logger.logger
+
 
 def getKey():
     try:
@@ -45,19 +47,19 @@ def save_sessions():
     try:
         with open(SESSION_FILE, 'w') as file:
             json.dump(sessions, file, indent=4)
-        print(f"Session successfully saved to {SESSION_FILE}")
+        logging.debug(f"Session successfully saved to {SESSION_FILE}")
     except Exception as e:
-        print(f"An error occurred while saving the session: {e}")
+        print(f"Error! An error occurred while saving the session: {e}")
 
 def load_sessions():
     global sessions
     try:
         with open(SESSION_FILE, 'r') as file:
             sessions = json.load(file)
-            print(f"Session successfully loaded from {SESSION_FILE}")
+            logging.debug(f"Session successfully loaded from {SESSION_FILE}")
             return sessions
     except Exception as e:
-        print(f"An error occurred while loading the session: {e}")
+        print(f"Error! An error occurred while loading the session: {e}")
         return None
     
 def get_assistant(name):
@@ -105,21 +107,71 @@ def set_assistant(assistant):
     #     ]
     # }
 def get_uploaded_file(path):
-    file = files.get(path)
-    if file:
-        if not file["dirty"]:
-            return file["path"]["id"]
+    if not sessions:
+        load_sessions()
+    files = sessions.get("files")
+    if files == None:
+        return None
+    for f in files.values():
+        logging.debug(f"f is {f},  of type {type(f)}")
+        if f["path"] == path and not f["dirty"]:
+            return f["id"]
     return None
 
+def set_uploaded_file_dirty(path):
+    global sessions
+    if not sessions:
+        load_sessions()
+    #we have updated the local copy of the file, the file needs to be updated next time.
+    files = sessions.get("files")
+    if not files:
+        print(f"Error. Unexpected file synch map not found.")
+        return
+    for f in files.values():
+        if f["path"] == path:
+            f["dirty"] = True
+    save_sessions()
+
+#files which have been edited since last upload so they are dirty or invalidated
+def get_dirty_uploaded_file_ids():
+    global sessions
+    if not sessions:
+        load_sessions()
+    dirty_files = []
+    files = sessions.get("files")
+    if not files:
+        print(f"Error. Unexpected file synch map not found.")
+        return []
+    for f in files.values():
+        if f["dirty"] == True:
+            dirty_files.append(f["id"])
+    return dirty_files
 
 def set_uploaded_file(path, id):
-    global files
-    file = files.get(path)
-    if file:
-        file["id"] = id
-        file["dirty"] = False
+    #if we find the existing path, for a different ID, 
+    #then we must make it dirty. 
+    global sessions
+    files = sessions.get("files")
+    if not files:
+        files = {}
+    new_file = {"path":path, "id":id, "dirty": False}   
+    files[id] = new_file
+    logging.debug(f"setting uploaded file: {path} - {id}")
+    logging.debug(f"files now: {files}")
+    sessions["files"] = files
+    save_sessions()
+
+def remove_dirty_uploaded_file_ids():
+    #if we find the existing path, for a different ID, 
+    #then we must make it dirty. 
+    global sessions
+    files = sessions.get("files")
+    if not files:
         return
-    new_file = {"path":path, "id":id, "dirty":False}   
-    files["path"] = new_file
-    print(f"setting uploaded file: {path} - {id}")
-    print(f"files now: {files}")
+    files_to_remove = []
+    for f in files.values():
+        if f["dirty"] == True:
+            files_to_remove.append(f["id"])
+    for ftr in files_to_remove:
+        del files[ftr]
+    save_sessions()

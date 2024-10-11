@@ -1,20 +1,20 @@
 import os
-from typing import List
 from openai import OpenAI
 import re
 import mimetypes
 import configurations 
+import logger 
 
 
 assistants = {}
 client = None
-
+logging = logger.logger
 
 def getClient():
     global client
     if client == None:
         client = OpenAI(api_key=configurations.getKey())
-        print("..getting OpenAI Client..")
+        logging.info("..getting OpenAI Client..")
     return client
 
 def create_assistant(component):
@@ -27,10 +27,18 @@ def create_assistant(component):
         tools=[{"type": "code_interpreter"}],
         model="gpt-4o-2024-08-06"
     )
-    print(f"\nCreating assistant for {component['name']} - {assistant}")
+    logging.info(f"\nCreating assistant for {component['name']} - {assistant}")
     assistants[component["name"]] = assistant
     return assistant
 
+def delete_files(id_list):
+    # list all files
+    #cycle through that
+    # delete each one. 
+    files = getClient().files
+    for id in id_list:
+        files.delete(id)
+        logging.debug(f"Deleted file: {id}")
 
 def delete_all_files():
     # list all files
@@ -39,15 +47,27 @@ def delete_all_files():
     files = getClient().files
     for file in files.list():
         files.delete(file.id)
-        print(f"Deleted file: {file.id} - {file.filename}")
+        logging.debug(f"Deleted file: {file.id} - {file.filename}")
 
-
-def TEST_files():    
+def delete_file(id):
+    #deletes attached files from the server
     files = getClient().files
-    file = files.create(file=open("config.json", "rb"),extra_headers={"ppath":"peepee"})
+    try:
+        files.delete(id)
+    except Exception as e:
+        print(f"Warning: Couldn't delete file. You may be accumulating files on the server. {e}")
 
-
-
+def delete_assistant_output_files():
+    #deletes attached files from the server
+    files = getClient().files
+    file_list = files.list()
+    for file in file_list:
+        if file.purpose == "assistants_output":
+            try:
+                files.delete(file.id)
+            except Exception as e:
+                print(f"Warning: Couldn't delete file. You may be accumulating files on the server. {e}")
+          
 
 def extract_python_code(messages):
     """
@@ -126,10 +146,9 @@ def write_file(content, component, config):
     directory = component.get('workdir')
     src = config.get('source')
     name = component.get('filename')
-
     # Print for debugging purposes
-    print(f"Config passed in is {config}")
-    print(f"workdir, name, and src are {directory}, {name}, and {src}")
+    logging.debug(f"Config passed in is {config}")
+    logging.debug(f"workdir, name, and src are {directory}, {name}, and {src}")
 
     # Ensure the directory exists (src/directory)
     full_directory = os.path.join(src, directory)
@@ -142,9 +161,9 @@ def write_file(content, component, config):
     try:
         with open(file_path, 'w') as file:
             file.write(content)
-        return f"File '{name}' has been written to '{file_path}'."
+        return f"File '{full_directory}' has been written to '{file_path}'."
     except Exception as e:
-        return f"An error occurred: {e}"
+        return f"An error occurred writing the file {full_directory}: {e}"
 
 def set_up_run(component, config):
     asst_id = configurations.get_assistant(component["name"])
@@ -152,7 +171,7 @@ def set_up_run(component, config):
         assistant = create_assistant(component)
         asst_id = assistant.id
         configurations.set_assistant(assistant)
-    print(f"startup with assistant {assistant.id}")
+    logging.debug(f"startup with assistant {assistant.id}")
     client = getClient()
     # get instructions and create prompt from the model.
     # get the working directory to copy the created files into.
@@ -177,9 +196,10 @@ def set_up_run(component, config):
         # print(f"List object type is {type (messages)}")
         # print(f"and what is this--> {messages.data[0].content[0].text.value.strip()}")
         content = extract_python_code(messages)
-        write_file(content, component, config)
+        resp = write_file(content, component, config)
+        logging.debug(resp)
     else:
-        print(run.status)
+        logging.warning(f"Unexpected Run Status {run.status}")
 
 def create_message_file_attachments(component, config, with_file = None):
     # Array to hold all file attachments (as dicts)
@@ -206,10 +226,10 @@ def create_message_file_attachments(component, config, with_file = None):
         if os.path.isfile(file_path):
             # check that the file doesn't exist before adding. 
             # Upload each file and create a dictionary with file_id and tools
-            existing_uploaded_file = configurations.get_uploaded_file(file_path)
-            if (existing_uploaded_file):
-                file_id_to_attach = existing_uploaded_file
-                print(f"File not uploaded, already up there - {file_path} ")
+            existing_uploaded_file_id = configurations.get_uploaded_file(file_path)
+            if (existing_uploaded_file_id):
+                file_id_to_attach = existing_uploaded_file_id
+                logging.debug(f"File not uploaded, already up there - {file_path} ")
             else:    
                 file = getClient().files.create(
                     file=open(file_path, "rb"),
@@ -224,7 +244,7 @@ def create_message_file_attachments(component, config, with_file = None):
                 "tools": [{"type": "code_interpreter"}]
             })
             # add it to the map so we can find it when it has been modified
-            filename_id_map[file.id] = file_path
+            filename_id_map[file_id_to_attach] = file_path
             
     
     return attachments, filename_id_map
@@ -233,7 +253,7 @@ def create_message_file_attachments(component, config, with_file = None):
 
 def write_new_file(file_id, path):
     client = getClient()
-    print("Creating a new file...")
+    print(f"Creating new file {path}")
 
     # Fetch the file content from the client
     file = client.files.content(file_id)
@@ -258,8 +278,7 @@ def write_new_file(file_id, path):
         mode = 'x' if is_text else 'xb'
         with open(path, mode) as new_file:
             new_file.write(content)
-
-        print(f"File successfully created at {path}")
+        logging.debug(f"File successfully created at {path}")
     except FileExistsError:
         print(f"Error: File '{path}' already exists.")
     except Exception as e:
@@ -269,11 +288,11 @@ def write_new_file(file_id, path):
 
 def rewrite_updated_file(file_id, path):
     client = getClient()
-    print("Rewriting updated file...")
+    print(f"Rewriting updated file...{path}")
 
     # Fetch the file content from the client
     file = client.files.content(file_id)
-    print(f"File type is {type(file)} and content is: {file.content}")
+    logging.debug(f"File type is {type(file)} and content is: {file.content}")
 
     try:
         # Check if the content is in bytes and decode it to a string
@@ -282,25 +301,39 @@ def rewrite_updated_file(file_id, path):
         # Open the file at the given path and overwrite its content with the decoded content
         with open(path, 'w') as file_to_overwrite:
             file_to_overwrite.write(content)
-        print(f"File successfully overwritten at {path}")
+        logging.debug(f"File successfully overwritten at {path}")
     except Exception as e:
-        print(f"An error occurred while writing to the file: {e}")
+        logging.debug(f"An error occurred while writing to the file: {e}")
 
     return None
 
 
+def clean_up_attachments():
+    #remove dirty files id from sessions.files?
+    dirty_files = configurations.get_dirty_uploaded_file_ids()
+    logging.debug(f"Dirty file list is: {dirty_files}")
+    delete_files(dirty_files)
+    configurations.remove_dirty_uploaded_file_ids()
+    #remove all assistants output files. 
+    delete_assistant_output_files()
 
 
-def execute_prompt(component, config, user_prompt, with_file=None):
+def execute_prompt(component, config, user_prompt, with_file=None, no_upload = False):
     #TODO : security / sanity check on the prompt.
+    #remove legacy files first
+    clean_up_attachments()
     asst_id = configurations.get_assistant(component["name"])
     if not asst_id:
         assistant = create_assistant(component)
         asst_id = assistant.id
         configurations.set_assistant(assistant)
     client = getClient()
-    file_attachments,filename_id_map  = create_message_file_attachments(component, config, with_file)
-    print(f"ID to filename map.. {filename_id_map}")
+    if no_upload:
+        file_attachments = []
+        filename_id_map = {}
+    else:
+        file_attachments,filename_id_map  = create_message_file_attachments(component, config, with_file)
+    logging.debug(f"ID to filename map.. {filename_id_map}")
     
     #ChatGPT Assistant stuff. Create Thread.
     thread = client.beta.threads.create()
@@ -332,38 +365,47 @@ def execute_prompt(component, config, user_prompt, with_file=None):
         )
         # print(f"List object type is {type (messages)}")
         # print(f"and what is this--> {messages.data[0].content[0].text.value.strip()}")
-    # TODO put in some proper error detection, making sure return values are ok, run status is valid etc. 
-
+    else:
+        print (f"Run finished unexpectedly with status {run.status}")
+        return
 
     if messages.data is not None and len(messages.data) > 0:
-        attachments = messages.data[0].attachments
-    # Check if attachments is not None before trying to loop
-        #TODO also check that attachments are actually file attachments. 
-        if attachments is not None and len(attachments) > 0:
-            for attachment in attachments:
-                # Retrieve the file using the file_id from the attachment
-                file = getClient().files.retrieve(attachment.file_id)
-                print(f"Lo. We have a file {file}, what's in the map? {filename_id_map}")
-                # Iterate over the file IDs in filename_id_map and check for matches
-                file_found = False
-                for file_id in filename_id_map:
-                    print(f"Looking through the map :-{file_id}, {filename_id_map[file_id]}, file.id is {file.id} filename is {file.filename}")
-                    if file_id in file.filename:
-                        print(f"Updating file.. {filename_id_map[file_id]} was updated.")
-                        file_found = True
-                        rewrite_updated_file(file.id, filename_id_map[file_id])
-                if not file_found:
-                    print(f"Downloading new file.. {file.filename}")
-                    new_path = os.path.join(config['source'], component['workdir'], os.path.basename(file.filename))
-                    write_new_file(file.id, new_path)        
+        #loop through all elements of data array. 
+        attachment_count = 0
+        for m in range(len(messages.data)-1,-1,-1):
+        # for message in messages.data:
+            message = messages.data[m]
+            attachments = message.attachments
+            # Check if attachments is not None before trying to loop
+            #TODO also check that attachments are actually file attachments. 
+            if attachments is not None and len(attachments) > 0:
+                for attachment in attachments:
+                    attachment_count += 1
+                    # Retrieve the file using the file_id from the attachment
+                    file = getClient().files.retrieve(attachment.file_id)
+                    if file.purpose != "assistants_output":
+                        continue
+                    # Iterate over the file IDs in filename_id_map and check for matches
+                    file_found = False
+                    # file_ids_to_remove = set()
+                    for file_id in filename_id_map:
+                        #print(f"Looking through the map :-{file_id}, {filename_id_map[file_id]}, file.id is {file.id} filename is {file.filename}")
+                        if file_id in file.filename:
+                            logging.info(f"Updating file.. {filename_id_map[file_id]} was updated.")
+                            file_found = True
+                            rewrite_updated_file(file.id, filename_id_map[file_id])
+                            #uploaded file now out of date, remove from session persist
+                            configurations.set_uploaded_file_dirty(filename_id_map[file_id]) 
 
-        else:
+                    if not file_found:
+                        print(f"Downloading new file.. {file.filename}")
+                        new_path = os.path.join(config['source'], component['workdir'], os.path.basename(file.filename))
+                        write_new_file(file.id, new_path)  
+    
+            logging.debug(f"Message {message.id} - attachments: {message.attachments}")    
+            print(f"{message.content[0].text.value}\n")
+        if attachment_count < 1:
             print(f"Warning: No Files Updated. Try a different prompt?")
-
-        for mess in (messages.data):
-            print(f"Message {mess.id} - attachments: {mess.attachments}")
-            print(f"{mess.content[0].text.value}\n")
-
     
     else:
         print(f"Error: No messages returned. Run Status is: {run.status}")
@@ -384,5 +426,5 @@ def execute_prompt(component, config, user_prompt, with_file=None):
     # )
     
     # return assistant
-# TEST_files()
+
     

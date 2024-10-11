@@ -1,14 +1,17 @@
 import json
 import os
 import sys
+import logger
 import chatgptAPIUtils
 import configurations
+
+
 
 config = {}
 assistants = {}
 rootDirectory = {}
 promptMode = False #deprecated
-
+logging = logger.logger
 
 
 def verify(msg: str) -> bool:
@@ -56,7 +59,7 @@ def list(param=None):
                 for file_name in os.listdir(full_path):
                     print(file_name)
             else:
-                print(f"The directory '{full_path}' does not exist or is not accessible.")
+                print(f"Error: The directory '{full_path}' does not exist or is not accessible.")
         else:
             print(f"Error: Could not find 'workdir' or 'source' in the configuration.")
     
@@ -142,7 +145,7 @@ def edit(param=None):
         print("usage: edit <name>")
         return
     while True:
-        print ("Type your prompt, use '/' to preceed commands '/view', or '/exit' or '/with <filename>' to only attach a specific file")
+        print ("Type your prompt, use '/' to precede commands '/view', or '/exit' or '/with <filename>' to only attach a specific file or /new to attach none and create new files")
         component_path = get_component_directory(component)
         user_input = input(f"{component.get('name')} > ")
         if not user_input:
@@ -234,7 +237,7 @@ def go():
 def main():
     global config 
     config = configurations.get_config()
-    print(f"Config is {config}")
+
     # print(availableComponents)
     go()
 

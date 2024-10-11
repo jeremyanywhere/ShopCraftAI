@@ -1,0 +1,29 @@
+body {
+      background-color: teal;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    #greetingImage {
+      max-width: 100%;
+      height: auto;
+      border: 2px solid white; /* Adding border */
+    }
+
+    button {
+      background-color: lightblue;
+      color: white;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.8;
+    }
+    
+    .text-center {
+      text-align: center;
+    }

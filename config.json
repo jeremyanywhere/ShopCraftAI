@@ -1,6 +1,7 @@
 {
   "destination":"dest",
   "source":"src",
+  "debug_level":"NOT USED",
   "components":[
       {
         "type": "persistence",
