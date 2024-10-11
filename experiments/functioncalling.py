@@ -1,3 +1,4 @@
+#should not be checked in
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -7,7 +8,7 @@ class Book(BaseModel):
 
 
 def go(): 
-    client = OpenAI(api_key="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")
+    
 
     assistant = client.beta.assistants.create(
     name="Function Caller",
